@@ -1,0 +1,41 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --sidebar-bg: #13151f;
+  --sidebar-border: #2a2d3e;
+  --sidebar-text: #e2e8f0;
+  --sidebar-muted: #8892a4;
+  --card-bg: #1e2130;
+  --card-hover: #252840;
+  --card-active: #2d3252;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-dim: rgba(99,102,241,0.18);
+  --panel-bg: #f8f9fb;
+  --panel-border: #e2e6ed;
+  --text-primary: #1a1f36;
+  --text-secondary: #5a6275;
+  --text-muted: #94a3b8;
+  --score-inactive: #eef0f6;
+  --radius: 10px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow: 0 2px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
