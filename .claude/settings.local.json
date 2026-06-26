@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(pkill -f \"vite --port 5173\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(pkill -f vite)",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/groups.json?per_page=100\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\(j.groups?.map\\(g=>g.name+' \\('+g.id+'\\)'\\)?.join\\('\\\\n'\\) || 'no groups'\\)\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/group_memberships.json?group_id=16743124489628&per_page=100\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('L1 Smartpms members:', j.group_memberships?.length\\); console.log\\(JSON.stringify\\(j.group_memberships?.slice\\(0,3\\)\\)\\)\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/group_memberships.json?group_id=17896873237916&per_page=100\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('L1 Smartpricing members:', j.group_memberships?.length\\)\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/search.json?query=type:ticket%20status:solved%20created%3E2026-06-18&per_page=10\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); const t=j.results||[]; console.log\\('total:', j.count\\); console.log\\('sample assignee_ids:', [...new Set\\(t.map\\(x=>x.assignee_id\\)\\)].join\\(', '\\)\\); console.log\\('sample satisfaction:', t.slice\\(0,3\\).map\\(x=>JSON.stringify\\(x.satisfaction_rating\\)\\)\\); console.log\\('reply_counts:', t.slice\\(0,3\\).map\\(x=>x.reply_count\\)\\)\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/search.json?query=type:ticket%20status:solved%20created%3E2026-05-26&per_page=5&include=users\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/search.json?query=type:ticket%20status:solved%20created%3E2026-05-26&per_page=1\")",
+      "Bash(curl -s \"http://localhost:5173/api/zendesk/api/v2/ticket_fields/16744953177756.json\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git rm *)"
+    ]
+  }
+}
