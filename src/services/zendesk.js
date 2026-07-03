@@ -92,6 +92,43 @@ export async function fetchL1GroupIds(groupNames) {
 }
 
 export async function fetchComments(ticketId) {
-  const data = await apiFetch(`/tickets/${ticketId}/comments.json?include=users`);
-  return { comments: data.comments || [], users: data.users || [] };
+  const [commentsData, ticketData] = await Promise.all([
+    apiFetch(`/tickets/${ticketId}/comments.json?include=users`),
+    apiFetch(`/tickets/${ticketId}.json?include=users`),
+  ]);
+
+  const comments = commentsData.comments || [];
+  const users = commentsData.users || [];
+
+  // For chat/messaging tickets the description holds the transcript.
+  // Inject it as a synthetic first message if no customer comments are visible.
+  const channel = ticketData.ticket?.via?.channel;
+  const isChatChannel = ["chat", "native_messaging", "sunshine_conversations_partner"].includes(channel);
+  const description = ticketData.ticket?.description;
+  const requesterId = ticketData.ticket?.requester_id;
+
+  // Merge users from both responses
+  const allUsers = [...users];
+  const seenIds = new Set(users.map((u) => u.id));
+  (ticketData.users || []).forEach((u) => {
+    if (!seenIds.has(u.id)) allUsers.push(u);
+  });
+
+  if (isChatChannel && description) {
+    // Check if the customer's messages already appear in comments
+    const hasCustomerComments = comments.some((c) => c.author_id === requesterId && c.public);
+    if (!hasCustomerComments) {
+      // Prepend the description as the opening message from the customer
+      comments.unshift({
+        id: `desc-${ticketId}`,
+        author_id: requesterId,
+        body: description,
+        public: true,
+        created_at: ticketData.ticket?.created_at,
+        _synthetic: true,
+      });
+    }
+  }
+
+  return { comments, users: allUsers, channel };
 }

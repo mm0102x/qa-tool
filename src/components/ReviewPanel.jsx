@@ -16,6 +16,7 @@ const SCORE_COLORS = { 1: "#ef4444", 2: "#f59e0b", 3: "#22c55e" };
 export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
   const [comments, setComments] = useState([]);
   const [commentAuthors, setCommentAuthors] = useState({});
+  const [channel, setChannel] = useState(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [scores, setScores] = useState({});
   const [reviewComment, setReviewComment] = useState("");
@@ -30,8 +31,9 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
     setComments([]);
     setCommentsLoading(true);
     fetchComments(ticket.id)
-      .then(({ comments: c, users }) => {
+      .then(({ comments: c, users, channel: ch }) => {
         setComments(c);
+        setChannel(ch);
         const map = {};
         users.forEach((u) => { map[u.id] = { name: u.name, email: u.email }; });
         setCommentAuthors(map);
@@ -118,7 +120,12 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
         <div style={s.col}>
           <div style={s.colHeader}>
             <span style={s.colTitle}>Conversation</span>
-            <span style={s.colCount}>{comments.length} messages</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {channel && (
+                <span style={s.channelTag}>{channel.replace(/_/g, " ")}</span>
+              )}
+              <span style={s.colCount}>{comments.length} messages</span>
+            </div>
           </div>
           <div style={s.thread}>
             {commentsLoading && <div style={s.loadingMsg}>Loading conversation…</div>}
@@ -126,7 +133,12 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
               <div style={s.loadingMsg}>No messages found</div>
             )}
             {comments.map((c) => (
-              <CommentBubble key={c.id} comment={c} authors={commentAuthors} />
+              <CommentBubble
+                key={c.id}
+                comment={c}
+                authors={commentAuthors}
+                requesterId={ticket.requester_id}
+              />
             ))}
           </div>
         </div>
@@ -206,9 +218,10 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
   );
 }
 
-function CommentBubble({ comment, authors }) {
+function CommentBubble({ comment, authors, requesterId }) {
   const author = authors[comment.author_id];
-  const authorName = author?.name || `User #${comment.author_id}`;
+  const isCustomer = comment.author_id === requesterId;
+  const authorName = author?.name || (isCustomer ? "Customer" : `Agent #${comment.author_id}`);
   const authorEmail = author?.email || "";
   const date = comment.created_at
     ? new Date(comment.created_at).toLocaleString("en-GB", {
@@ -217,7 +230,7 @@ function CommentBubble({ comment, authors }) {
     : "";
 
   return (
-    <div style={{ ...bub.wrap, ...(comment.public ? bub.public : bub.internal) }}>
+    <div style={{ ...bub.wrap, ...(isCustomer ? bub.customer : comment.public ? bub.public : bub.internal) }}>
       <div style={bub.header}>
         <div>
           <span style={bub.name}>{authorName}</span>
@@ -347,6 +360,16 @@ const s = {
   colCount: {
     fontSize: 11,
     color: "var(--text-muted)",
+  },
+  channelTag: {
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    background: "#ede9fe",
+    color: "#6d28d9",
+    borderRadius: 4,
+    padding: "2px 6px",
   },
   pct: {
     fontSize: 14,
@@ -478,6 +501,10 @@ const bub = {
     padding: "10px 14px",
     fontSize: 13,
     lineHeight: 1.55,
+  },
+  customer: {
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
   },
   public: {
     background: "#f0f4ff",
