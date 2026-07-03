@@ -1,12 +1,17 @@
-function isoWeekKey() {
-  const now = new Date();
-  const jan4 = new Date(now.getFullYear(), 0, 4);
-  const week = Math.ceil(((now - jan4) / 86400000 + jan4.getDay() + 1) / 7);
-  return `${now.getFullYear()}-W${String(week).padStart(2, "0")}`;
+function isoWeekKey(dateStr) {
+  const d = dateStr ? new Date(dateStr + "T12:00:00") : new Date();
+  const jan4 = new Date(d.getFullYear(), 0, 4);
+  const week = Math.ceil(((d - jan4) / 86400000 + jan4.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-const QUEUE_KEY = () => `qa_queue_${isoWeekKey()}`;
-const REVIEWED_KEY = () => `qa_reviewed_${isoWeekKey()}`;
+function currentIsoWeekKey() {
+  return isoWeekKey(null);
+}
+
+const QUEUE_KEY = (startDate, endDate) =>
+  `qa_queue_${startDate}_${endDate}`;
+const REVIEWED_KEY = () => `qa_reviewed_${currentIsoWeekKey()}`;
 
 // --- Reviewed tracking ---
 
@@ -26,12 +31,11 @@ export function markReviewed(ticketId) {
 
 // --- Queue persistence ---
 
-function loadCachedQueue() {
+function loadCachedQueue(startDate, endDate) {
   try {
-    const raw = localStorage.getItem(QUEUE_KEY());
+    const raw = localStorage.getItem(QUEUE_KEY(startDate, endDate));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Invalidate cache if it looks empty or malformed
     if (typeof parsed !== "object" || Array.isArray(parsed)) return null;
     if (Object.keys(parsed).length === 0) return null;
     return parsed;
@@ -40,8 +44,8 @@ function loadCachedQueue() {
   }
 }
 
-function saveQueue(queue) {
-  localStorage.setItem(QUEUE_KEY(), JSON.stringify(queue));
+function saveQueue(queue, startDate, endDate) {
+  localStorage.setItem(QUEUE_KEY(startDate, endDate), JSON.stringify(queue));
 }
 
 // --- Sampling ---
@@ -57,8 +61,12 @@ const EXCLUDED_TAGS = [
 
 const hasExcludedTag = (t) => t.tags?.some((tag) => EXCLUDED_TAGS.includes(tag));
 
-// Groups tickets by assignee_id, runs sampling per agent, returns:
-// { [agentId]: [{ ...ticket, _reason: "Random"|"Low CSAT"|"High CSAT"|"High Replies" }] }
+// Groups tickets by assignee_id then by ISO week, samples per week:
+//   - ALL bad CSAT (full pool, tags never block)
+//   - 1 High CSAT if no bad CSAT that week (full pool)
+//   - 1 Random (clean pool, excluded tags removed)
+//   - 1 High Replies (clean pool)
+// Returns { [agentId]: [{ ...ticket, _reason }] }
 export function buildQueue(tickets) {
   // Group by agent
   const byAgent = {};
@@ -71,36 +79,59 @@ export function buildQueue(tickets) {
 
   const queue = {};
 
-  for (const [agentId, pool] of Object.entries(byAgent)) {
+  for (const [agentId, agentTickets] of Object.entries(byAgent)) {
     const selected = [];
-    const used = new Set();
+    const usedIds = new Set();
 
-    // Filtered pool — excluded tags removed (does NOT apply to CSAT slot)
-    const cleanPool = pool.filter((t) => !hasExcludedTag(t));
-
-    // 1. Random — from clean pool only
-    if (cleanPool.length > 0) {
-      const t = cleanPool[Math.floor(Math.random() * cleanPool.length)];
-      selected.push({ ...t, _reason: "Random" });
-      used.add(t.id);
+    // Collect ALL bad CSAT across the whole date range first
+    const allBadCsat = agentTickets.filter(
+      (t) => t.satisfaction_rating?.score === "bad"
+    );
+    for (const t of allBadCsat) {
+      selected.push({ ...t, _reason: "Low CSAT" });
+      usedIds.add(t.id);
     }
 
-    // 2. Notable CSAT — full pool, excluded tags allowed so low CSAT always surfaces
-    const badCsat = pool.filter((t) => !used.has(t.id) && t.satisfaction_rating?.score === "bad");
-    const goodCsat = pool.filter((t) => !used.has(t.id) && t.satisfaction_rating?.score === "good");
-    const csatPick = badCsat[0] || goodCsat[0] || null;
-    if (csatPick) {
-      const reason = csatPick.satisfaction_rating?.score === "bad" ? "Low CSAT" : "High CSAT";
-      selected.push({ ...csatPick, _reason: reason });
-      used.add(csatPick.id);
+    // Group remaining tickets by ISO week for per-week sampling
+    const byWeek = {};
+    for (const t of agentTickets) {
+      if (usedIds.has(t.id)) continue;
+      const wk = isoWeekKey(t.created_at?.slice(0, 10));
+      if (!byWeek[wk]) byWeek[wk] = [];
+      byWeek[wk].push(t);
     }
 
-    // 3. Highest reply count — clean pool only
-    const byReplies = cleanPool
-      .filter((t) => !used.has(t.id))
-      .sort((a, b) => (b._replies || 0) - (a._replies || 0));
-    if (byReplies.length > 0) {
-      selected.push({ ...byReplies[0], _reason: "High Replies" });
+    for (const weekTickets of Object.values(byWeek)) {
+      const weekUsed = new Set();
+      const cleanPool = weekTickets.filter((t) => !hasExcludedTag(t));
+
+      // 1 High CSAT per week (bad already taken above)
+      const goodCsat = weekTickets.find(
+        (t) => t.satisfaction_rating?.score === "good" && !weekUsed.has(t.id)
+      );
+      if (goodCsat) {
+        selected.push({ ...goodCsat, _reason: "High CSAT" });
+        weekUsed.add(goodCsat.id);
+        usedIds.add(goodCsat.id);
+      }
+
+      // 1 Random from clean pool
+      const randomPool = cleanPool.filter((t) => !weekUsed.has(t.id));
+      if (randomPool.length > 0) {
+        const pick = randomPool[Math.floor(Math.random() * randomPool.length)];
+        selected.push({ ...pick, _reason: "Random" });
+        weekUsed.add(pick.id);
+        usedIds.add(pick.id);
+      }
+
+      // 1 Highest replies from clean pool
+      const repliesPool = cleanPool
+        .filter((t) => !weekUsed.has(t.id))
+        .sort((a, b) => (b._replies || 0) - (a._replies || 0));
+      if (repliesPool.length > 0) {
+        selected.push({ ...repliesPool[0], _reason: "High Replies" });
+        usedIds.add(repliesPool[0].id);
+      }
     }
 
     queue[agentId] = selected;
@@ -109,14 +140,14 @@ export function buildQueue(tickets) {
   return queue;
 }
 
-// Returns the queue for the current week — cached in localStorage.
+// Returns the queue for the given date range — cached in localStorage.
 // Pass forceRebuild=true to discard cache and resample.
-export function getOrBuildQueue(tickets, forceRebuild = false) {
+export function getOrBuildQueue(tickets, forceRebuild = false, startDate = "", endDate = "") {
   if (!forceRebuild) {
-    const cached = loadCachedQueue();
+    const cached = loadCachedQueue(startDate, endDate);
     if (cached) return cached;
   }
   const queue = buildQueue(tickets);
-  saveQueue(queue);
+  saveQueue(queue, startDate, endDate);
   return queue;
 }
