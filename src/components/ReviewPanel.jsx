@@ -77,6 +77,7 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
         speed: scores.speed,
         clarity: scores.clarity,
         total: `${total}/${maxScore}`,
+        negativeCsat: (ticket.satisfaction_rating?.score === "bad" || ticket._reason === "Low CSAT") ? "Yes" : "",
         notes: reviewComment,
       });
       setSaveStatus("saved");
