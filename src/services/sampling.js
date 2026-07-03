@@ -51,6 +51,8 @@ const EXCLUDED_TAGS = [
   "billing_questions",
   "feature_requests",
   "other__e.g._feedback_",
+  "closed_by_merge",
+  "aircall",
 ];
 
 const hasExcludedTag = (t) => t.tags?.some((tag) => EXCLUDED_TAGS.includes(tag));
