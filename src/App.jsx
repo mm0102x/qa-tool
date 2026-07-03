@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import TicketQueue from "./components/TicketQueue";
 import ReviewPanel from "./components/ReviewPanel";
 import { fetchAgents, fetchL1GroupIds, fetchL1AgentIds, fetchL1Tickets } from "./services/zendesk";
@@ -25,7 +25,6 @@ export default function App() {
   const [error, setError] = useState(null);
 
   const [reviewedIds, setReviewedIds] = useState(() => getReviewedIds());
-  const didBust = useRef(false);
 
   // Load agents independently from group IDs — failures are isolated
   useEffect(() => {
@@ -85,14 +84,6 @@ export default function App() {
     }
   }, [l1GroupIds, l1AgentIds, startDate, endDate]);
 
-  useEffect(() => {
-    if (l1GroupIds !== null && l1AgentIds !== null) {
-      // Force rebuild once per session to clear any stale localStorage cache
-      const forceRebuild = !didBust.current;
-      didBust.current = true;
-      loadQueue(forceRebuild);
-    }
-  }, [l1GroupIds, l1AgentIds]);
 
   const handleReviewed = (ticketId) => {
     markReviewed(ticketId);
