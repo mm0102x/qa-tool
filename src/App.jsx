@@ -55,16 +55,30 @@ export default function App() {
   }, []);
 
   const loadQueue = useCallback(async (forceRebuild = false) => {
-    if (!l1GroupIds || !l1AgentIds) return;
     setLoading(true);
     setError(null);
     try {
-      const tickets = await fetchL1Tickets(l1GroupIds, startDate, endDate);
-      // Filter to only agents confirmed to be L1 members
-      const filtered = tickets.filter((t) => t.assignee_id && l1AgentIds.has(t.assignee_id));
+      let gids = l1GroupIds;
+      let aids = l1AgentIds;
+
+      // If groups/agents haven't loaded yet (or failed), retry fetching them
+      if (!gids?.length || !aids?.size) {
+        [gids, aids] = await Promise.all([
+          fetchL1GroupIds(L1_GROUPS),
+          fetchL1AgentIds(L1_GROUPS),
+        ]);
+        setL1GroupIds(gids);
+        setL1AgentIds(aids);
+      }
+
+      if (!gids?.length) throw new Error("No L1 groups found — check Zendesk connection");
+
+      const tickets = await fetchL1Tickets(gids, startDate, endDate);
+      const filtered = tickets.filter((t) => t.assignee_id && aids.has(t.assignee_id));
       const q = getOrBuildQueue(filtered, forceRebuild);
       setQueue(q);
     } catch (e) {
+      console.error("loadQueue error:", e);
       setError(e.message);
     } finally {
       setLoading(false);
