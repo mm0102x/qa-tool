@@ -75,7 +75,7 @@ export default function App() {
 
       const tickets = await fetchL1Tickets(gids, startDate, endDate);
       const filtered = tickets.filter((t) => t.assignee_id && aids.has(t.assignee_id));
-      const q = getOrBuildQueue(filtered, forceRebuild);
+      const q = getOrBuildQueue(filtered, forceRebuild, startDate, endDate);
       setQueue(q);
     } catch (e) {
       console.error("loadQueue error:", e);
