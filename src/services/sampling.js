@@ -33,6 +33,12 @@ export function markReviewed(ticketId) {
 
 function loadCachedQueue(startDate, endDate) {
   try {
+    // Clear stale queue keys from other date ranges to free up space
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("qa_queue_") && key !== QUEUE_KEY(startDate, endDate)) {
+        localStorage.removeItem(key);
+      }
+    }
     const raw = localStorage.getItem(QUEUE_KEY(startDate, endDate));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
@@ -44,8 +50,28 @@ function loadCachedQueue(startDate, endDate) {
   }
 }
 
+const TICKET_FIELDS = [
+  "id", "subject", "assignee_id", "requester_id", "status",
+  "created_at", "tags", "satisfaction_rating", "via",
+  "_reason", "_replies",
+];
+
+function slimTicket(t) {
+  const slim = {};
+  for (const k of TICKET_FIELDS) if (t[k] !== undefined) slim[k] = t[k];
+  return slim;
+}
+
 function saveQueue(queue, startDate, endDate) {
-  localStorage.setItem(QUEUE_KEY(startDate, endDate), JSON.stringify(queue));
+  const slim = {};
+  for (const [agentId, tickets] of Object.entries(queue)) {
+    slim[agentId] = tickets.map(slimTicket);
+  }
+  try {
+    localStorage.setItem(QUEUE_KEY(startDate, endDate), JSON.stringify(slim));
+  } catch (e) {
+    console.warn("localStorage quota exceeded — queue not cached:", e);
+  }
 }
 
 // --- Sampling ---
