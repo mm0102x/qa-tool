@@ -55,27 +55,22 @@ export async function fetchL1Tickets(groupIds, startDate, endDate) {
   const allTickets = [];
 
   for (const gid of groupIds) {
-    let url = `${BASE}/tickets.json?group_id=${gid}&status=solved&sort_by=created_at&sort_order=desc&per_page=100&include=metric_sets`;
+    const query = `group_id:${gid} status:solved${startDate ? ` created>=${startDate}` : ""}${endDate ? ` created<=${endDate}` : ""}`;
+    let url = `${BASE}/search.json?query=${encodeURIComponent(query)}&sort_by=created_at&sort_order=desc&per_page=100`;
+
     while (url) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Zendesk ${res.status}`);
       const data = await res.json();
 
-      const metrics = {};
-      (data.metric_sets || []).forEach((m) => { metrics[m.ticket_id] = m; });
-
-      let pastWindow = false;
-      for (const t of (data.tickets || [])) {
-        const d = t.created_at?.slice(0, 10);
-        if (startDate && d < startDate) { pastWindow = true; continue; }
-        if (endDate && d > endDate) continue;
+      for (const t of (data.results || [])) {
+        if (t.status !== "solved") continue;
         if (seen.has(t.id)) continue;
         seen.add(t.id);
-        t._replies = metrics[t.id]?.replies ?? 0;
+        t._replies = t.reply_count ?? 0;
         allTickets.push(t);
       }
 
-      if (pastWindow) break;
       url = proxyUrl(data.next_page);
     }
   }
