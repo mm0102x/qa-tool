@@ -17,6 +17,7 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
   const [comments, setComments] = useState([]);
   const [commentAuthors, setCommentAuthors] = useState({});
   const [channel, setChannel] = useState(null);
+  const [fullResolutionMinutes, setFullResolutionMinutes] = useState(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [scores, setScores] = useState({});
   const [reviewComment, setReviewComment] = useState("");
@@ -29,11 +30,13 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
     setReviewComment("");
     setSaveStatus(null);
     setComments([]);
+    setFullResolutionMinutes(null);
     setCommentsLoading(true);
     fetchComments(ticket.id)
-      .then(({ comments: c, users, channel: ch }) => {
+      .then(({ comments: c, users, channel: ch, fullResolutionMinutes: frm }) => {
         setComments(c);
         setChannel(ch);
+        setFullResolutionMinutes(frm);
         const map = {};
         users.forEach((u) => { map[u.id] = { name: u.name, email: u.email }; });
         setCommentAuthors(map);
@@ -66,7 +69,7 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
     try {
       const agent = agentMap[ticket.assignee_id];
       await saveReview({
-        date: new Date().toLocaleDateString("it-IT"),
+        date: ticket.created_at ? new Date(ticket.created_at).toLocaleDateString("it-IT") : new Date().toLocaleDateString("it-IT"),
         ticketId: ticket.id,
         subject: ticket.subject,
         agentName: agent?.name || `#${ticket.assignee_id}`,
@@ -82,8 +85,10 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
       });
       setSaveStatus("saved");
       setTimeout(() => onReviewed?.(ticket.id), 1200);
-    } catch {
+    } catch (err) {
+      console.error("Save failed:", err);
       setSaveStatus("error");
+      // Do NOT call onReviewed — keep ticket in queue so they can retry
     } finally {
       setSaving(false);
     }
@@ -108,6 +113,22 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
               <span style={s.metaLabel}>Created</span>
               <span style={s.metaValue}>
                 {new Date(ticket.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+            </div>
+          )}
+          {fullResolutionMinutes !== null && (
+            <div style={s.metaBlock}>
+              <span style={s.metaLabel}>Resolution time</span>
+              <span style={{
+                ...s.metaValue,
+                color: fullResolutionMinutes > 1440 ? "#ef4444" : fullResolutionMinutes > 480 ? "#f59e0b" : "#22c55e"
+              }}>
+                {(() => {
+                  const d = Math.floor(fullResolutionMinutes / 1440);
+                  const h = Math.floor((fullResolutionMinutes % 1440) / 60);
+                  const m = fullResolutionMinutes % 60;
+                  return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(" ");
+                })()}
               </span>
             </div>
           )}
@@ -198,7 +219,7 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
                 <span style={s.savedMsg}>✓ Saved to Google Sheets</span>
               )}
               {saveStatus === "error" && (
-                <span style={s.errorMsg}>Failed — check webhook URL</span>
+                <span style={s.errorMsg}>⚠ Sheet save failed — ticket kept in queue, try again</span>
               )}
               {!allScored && !saveStatus && (
                 <span style={s.hint}>Score all 5 criteria to save</span>
