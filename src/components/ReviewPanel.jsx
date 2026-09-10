@@ -116,7 +116,7 @@ export default function ReviewPanel({ ticket, agentMap, onReviewed }) {
               </span>
             </div>
           )}
-          {fullResolutionMinutes !== null && (
+          {typeof fullResolutionMinutes === "number" && (
             <div style={s.metaBlock}>
               <span style={s.metaLabel}>Resolution time</span>
               <span style={{

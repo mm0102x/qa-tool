@@ -87,10 +87,15 @@ export async function fetchL1GroupIds(groupNames) {
 }
 
 export async function fetchComments(ticketId) {
-  const [commentsData, ticketData] = await Promise.all([
+  const [commentsData, ticketData, metricsData] = await Promise.all([
     apiFetch(`/tickets/${ticketId}/comments.json?include=users`),
     apiFetch(`/tickets/${ticketId}.json?include=users`),
+    // Metrics can 404 on very new or archived tickets — treat as unavailable
+    apiFetch(`/tickets/${ticketId}/metrics.json`).catch(() => null),
   ]);
+
+  const fullResolutionMinutes =
+    metricsData?.ticket_metric?.full_resolution_time_in_minutes?.calendar ?? null;
 
   const comments = commentsData.comments || [];
   const users = commentsData.users || [];
@@ -125,5 +130,5 @@ export async function fetchComments(ticketId) {
     }
   }
 
-  return { comments, users: allUsers, channel };
+  return { comments, users: allUsers, channel, fullResolutionMinutes };
 }
